@@ -111,12 +111,11 @@ Syntax: cpplint.py [--verbose=#] [--output=vs7] [--filter=-x,+y,...]
       specified directory.
 
       Examples:
-        Assuming that src/.git exists, the header guard CPP variables for
-        src/chrome/browser/ui/browser.h are:
+        The header guard CPP variables for src/chrome/browser/ui/browser.h are:
 
-        No flag => CHROME_BROWSER_UI_BROWSER_H_
-        --root=chrome => BROWSER_UI_BROWSER_H_
-        --root=chrome/browser => UI_BROWSER_H_
+        --root=src => CHROME_BROWSER_UI_BROWSER_H_
+        --root=src/chrome => BROWSER_UI_BROWSER_H_
+        --root=src/chrome/browser => UI_BROWSER_H_
 
     linelength=digits
       This is the allowed line length for the project. The default value is
