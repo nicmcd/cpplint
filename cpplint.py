@@ -4585,7 +4585,7 @@ def CheckIncludeLine(filename, clean_lines, linenum, include_state, error):
   # We also make an exception for Lua headers, which follow google
   # naming convention but not the include convention.
   match = Match(r'#include\s*"([^/]+\.h)"', line)
-  if match and not _THIRD_PARTY_HEADERS_PATTERN.match(match.group(1)):
+  if match and not os.path.isfile(os.path.join(_root, match.group(1))) and not _THIRD_PARTY_HEADERS_PATTERN.match(match.group(1)):
     error(filename, linenum, 'build/include', 4,
           'Include the directory when naming .h files')
 
