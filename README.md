@@ -1,5 +1,5 @@
 # cpplint
-Google CppLint (modified for me)
+Google CppLint (modified for use with https://github.com/nicmcd/make-c-cpp)
 
 Modifications:
 - Doesn't print "Done processing <file>".
