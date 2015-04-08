@@ -107,11 +107,8 @@ Syntax: cpplint.py [--verbose=#] [--output=vs7] [--filter=-x,+y,...]
 
     root=subdir
       The root directory used for deriving header guard CPP variable.
-      By default, the header guard CPP variable is calculated as the relative
-      path to the directory that contains .git, .hg, or .svn.  When this flag
-      is specified, the relative path is calculated from the specified
-      directory. If the specified directory does not exist, this flag is
-      ignored.
+      This flag must be specified. The relative path is calculated from the
+      specified directory.
 
       Examples:
         Assuming that src/.git exists, the header guard CPP variables for
@@ -986,50 +983,11 @@ class FileInfo(object):
     """Make Windows paths like Unix."""
     return os.path.abspath(self._filename).replace('\\', '/')
 
-  def RepositoryName(self):
-    """FullName after removing the local path to the repository.
-
-    If we have a real absolute path name here we can try to do something smart:
-    detecting the root of the checkout and truncating /path/to/checkout from
-    the name so that we get header guards that don't include things like
-    "C:\Documents and Settings\..." or "/home/username/..." in them and thus
-    people on different computers who have checked the source out to different
-    locations won't see bogus errors.
-    """
+  def RelativeName(self):
+    """FullName after removing the local path relative to _root."""
     fullname = self.FullName()
-
-    if os.path.exists(fullname):
-      project_dir = os.path.dirname(fullname)
-
-      if os.path.exists(os.path.join(project_dir, ".svn")):
-        # If there's a .svn file in the current directory, we recursively look
-        # up the directory tree for the top of the SVN checkout
-        root_dir = project_dir
-        one_up_dir = os.path.dirname(root_dir)
-        while os.path.exists(os.path.join(one_up_dir, ".svn")):
-          root_dir = os.path.dirname(root_dir)
-          one_up_dir = os.path.dirname(one_up_dir)
-
-        prefix = os.path.commonprefix([root_dir, project_dir])
-        return fullname[len(prefix) + 1:]
-
-      # Not SVN <= 1.6? Try to find a git, hg, or svn top level directory by
-      # searching up from the current path.
-      root_dir = os.path.dirname(fullname)
-      while (root_dir != os.path.dirname(root_dir) and
-             not os.path.exists(os.path.join(root_dir, ".git")) and
-             not os.path.exists(os.path.join(root_dir, ".hg")) and
-             not os.path.exists(os.path.join(root_dir, ".svn"))):
-        root_dir = os.path.dirname(root_dir)
-
-      if (os.path.exists(os.path.join(root_dir, ".git")) or
-          os.path.exists(os.path.join(root_dir, ".hg")) or
-          os.path.exists(os.path.join(root_dir, ".svn"))):
-        prefix = os.path.commonprefix([root_dir, project_dir])
-        return fullname[len(prefix) + 1:]
-
-    # Don't know what to do; header guard warnings may be wrong...
-    return fullname
+    relname = fullname.replace(_root + '/', '')
+    return relname
 
   def Split(self):
     """Splits the file into the directory, basename, and extension.
@@ -1041,7 +999,7 @@ class FileInfo(object):
       A tuple of (directory, basename, extension).
     """
 
-    googlename = self.RepositoryName()
+    googlename = self.RelativeName()
     project, rest = os.path.split(googlename)
     return (project,) + os.path.splitext(rest)
 
@@ -1669,7 +1627,7 @@ def GetHeaderGuardCPPVariable(filename):
   filename = filename.replace('C++', 'cpp').replace('c++', 'cpp')
 
   fileinfo = FileInfo(filename)
-  file_path_from_root = fileinfo.RepositoryName()
+  file_path_from_root = fileinfo.RelativeName()
   if _root:
     file_path_from_root = re.sub('^' + _root + os.sep, '', file_path_from_root)
   return re.sub(r'[^a-zA-Z0-9]', '_', file_path_from_root).upper() + '_'
@@ -1784,7 +1742,7 @@ def CheckHeaderFileIncluded(filename, include_state, error):
   headerfile = filename[0:len(filename) - 2] + 'h'
   if not os.path.exists(headerfile):
     return
-  headername = FileInfo(headerfile).RepositoryName()
+  headername = FileInfo(headerfile).RelativeName()
   first_include = 0
   for section_list in include_state.include_list:
     for f in section_list:
@@ -1794,7 +1752,7 @@ def CheckHeaderFileIncluded(filename, include_state, error):
         first_include = f[1]
 
   error(filename, first_include, 'build/include', 5,
-        '%s should include its header file %s' % (fileinfo.RepositoryName(),
+        '%s should include its header file %s' % (fileinfo.RelativeName(),
                                                   headername))
 
 
@@ -4581,7 +4539,7 @@ def _ClassifyInclude(fileinfo, include, is_system):
   # basename when we drop common extensions, and the include
   # lives in . , then it's likely to be owned by the target file.
   target_dir, target_base = (
-      os.path.split(_DropCommonSuffixes(fileinfo.RepositoryName())))
+      os.path.split(_DropCommonSuffixes(fileinfo.RelativeName())))
   include_dir, include_base = os.path.split(_DropCommonSuffixes(include))
   if target_base == include_base and (
       include_dir == target_dir or
@@ -4645,7 +4603,7 @@ def CheckIncludeLine(filename, clean_lines, linenum, include_state, error):
             '"%s" already included at %s:%s' %
             (include, filename, duplicate_line))
     elif (include.endswith('.cc') and
-          os.path.dirname(fileinfo.RepositoryName()) != os.path.dirname(include)):
+          os.path.dirname(fileinfo.RelativeName()) != os.path.dirname(include)):
       error(filename, linenum, 'build/include', 4,
             'Do not include .cc files from other packages')
     elif not _THIRD_PARTY_HEADERS_PATTERN.match(include):
@@ -6271,7 +6229,9 @@ def ParseArguments(args):
       counting_style = val
     elif opt == '--root':
       global _root
-      _root = val
+      _root = os.path.abspath(val).replace('\\', '/')
+      if not os.path.isdir(_root):
+        PrintUsage('Root "{0}" does not exist'.format(val))
     elif opt == '--linelength':
       global _line_length
       try:
@@ -6284,6 +6244,9 @@ def ParseArguments(args):
           _valid_extensions = set(val.split(','))
       except ValueError:
           PrintUsage('Extensions must be comma seperated list.')
+
+  if not _root:
+    PrintUsage('No --root was given, this is a requirement')
 
   if not filenames:
     PrintUsage('No files were specified.')
