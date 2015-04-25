@@ -5921,7 +5921,6 @@ def FlagCxx11Features(filename, clean_lines, linenum, error):
   include = Match(r'\s*#\s*include\s+[<"]([^<"]+)[">]', line)
   if include and include.group(1) in ('cfenv',
                                       'fenv.h',
-                                      'regex',
                                       'system_error',
                                      ):
     error(filename, linenum, 'build/c++11', 5,
